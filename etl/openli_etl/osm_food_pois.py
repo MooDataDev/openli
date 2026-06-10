@@ -5,6 +5,8 @@ import json
 import logging
 import math
 import re
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -16,6 +18,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from shapely import wkb
 from shapely.geometry import LineString, Point, Polygon
+from tqdm import tqdm
 
 
 LOGGER = logging.getLogger("openli_etl.osm_food_pois")
@@ -146,18 +149,60 @@ class ExtractionConfig:
     output_path: Path
     snapshot_date: date
     categories: set[str]
+    show_progress: bool = True
+    max_extract: int | None = None
+    estimate_total_objects: bool = True
+
+
+class MaxExtractReached(Exception):
+    """Stop OSM scanning after the configured number of matched POIs."""
+
+
+def estimate_total_osm_objects(input_path: Path) -> int | None:
+    command = ["osmium", "fileinfo", "-e", str(input_path)]
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+    except FileNotFoundError:
+        LOGGER.warning("Could not estimate total objects because the osmium CLI is not installed.")
+        return None
+    except subprocess.CalledProcessError as exc:
+        LOGGER.warning("Could not estimate total objects with osmium fileinfo: %s", exc.stderr.strip())
+        return None
+
+    output = f"{result.stdout}\n{result.stderr}"
+    counts = []
+    for label in ("nodes", "ways", "relations"):
+        match = re.search(rf"Number of {label}:\s+([0-9]+)", output)
+        if not match:
+            LOGGER.warning("Could not parse number of %s from osmium fileinfo output.", label)
+            return None
+        counts.append(int(match.group(1)))
+
+    return sum(counts)
 
 
 class RestaurantPoiHandler(osmium.SimpleHandler):
-    def __init__(self, categories: set[str], source_file: Path, snapshot_date: date) -> None:
+    def __init__(
+        self,
+        categories: set[str],
+        source_file: Path,
+        snapshot_date: date,
+        max_extract: int | None = None,
+        progress_bar: tqdm | None = None,
+    ) -> None:
         super().__init__()
         self.categories = categories
         self.source_file = str(source_file)
         self.snapshot_date = snapshot_date.isoformat()
         self.extraction_timestamp = datetime.now(UTC).isoformat()
+        self.max_extract = max_extract
         self.records: list[dict[str, object]] = []
+        self.progress_bar = progress_bar
+        self.scanned_objects = 0
+        self.matched_objects = 0
 
     def node(self, node: osmium.osm.Node) -> None:
+        self._tick_progress()
         tags = dict(node.tags)
         if not self._is_target(tags):
             return
@@ -173,8 +218,10 @@ class RestaurantPoiHandler(osmium.SimpleHandler):
             geometry_wkb=point_wkb(lon, lat),
         )
         self.records.append(record)
+        self._record_match()
 
     def way(self, way: osmium.osm.Way) -> None:
+        self._tick_progress()
         tags = dict(way.tags)
         if not self._is_target(tags):
             return
@@ -190,6 +237,25 @@ class RestaurantPoiHandler(osmium.SimpleHandler):
             geometry_wkb=geometry,
         )
         self.records.append(record)
+        self._record_match()
+
+    def relation(self, relation: osmium.osm.Relation) -> None:
+        self._tick_progress()
+
+    def _tick_progress(self) -> None:
+        self.scanned_objects += 1
+        if self.progress_bar is None:
+            return
+        self.progress_bar.update(1)
+        if self.scanned_objects % 100_000 == 0:
+            self.progress_bar.set_postfix_str(f"matches={self.matched_objects:,}", refresh=False)
+
+    def _record_match(self) -> None:
+        self.matched_objects += 1
+        if self.progress_bar is not None:
+            self.progress_bar.set_postfix_str(f"matches={self.matched_objects:,}", refresh=False)
+        if self.max_extract is not None and self.matched_objects >= self.max_extract:
+            raise MaxExtractReached
 
     def _is_target(self, tags: dict[str, str]) -> bool:
         return tags.get("amenity") in self.categories
@@ -277,7 +343,7 @@ def quality_summary(dataframe: pd.DataFrame) -> dict[str, object]:
     }
 
 
-def write_parquet(dataframe: pd.DataFrame, output_path: Path) -> None:
+def write_parquet(dataframe: pd.DataFrame, output_path: Path, show_progress: bool = True) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     schema = pa.schema(
         [
@@ -292,8 +358,17 @@ def write_parquet(dataframe: pd.DataFrame, output_path: Path) -> None:
             pa.field("snapshot_date", pa.string()),
         ]
     )
-    table = pa.Table.from_pandas(dataframe, schema=schema, preserve_index=False)
-    pq.write_table(table, output_path, compression="zstd")
+    with tqdm(
+        total=2,
+        desc="Writing Parquet",
+        unit="step",
+        disable=not show_progress,
+        file=sys.stderr,
+    ) as progress_bar:
+        table = pa.Table.from_pandas(dataframe, schema=schema, preserve_index=False)
+        progress_bar.update(1)
+        pq.write_table(table, output_path, compression="zstd")
+        progress_bar.update(1)
 
 
 def write_summary(summary: dict[str, object], output_path: Path) -> Path:
@@ -305,13 +380,36 @@ def write_summary(summary: dict[str, object], output_path: Path) -> Path:
 def extract(config: ExtractionConfig) -> tuple[pd.DataFrame, dict[str, object]]:
     LOGGER.info("Reading OSM file: %s", config.input_path)
     LOGGER.info("Target amenity categories: %s", ", ".join(sorted(config.categories)))
+    if config.max_extract is not None:
+        LOGGER.info("Max extract limit: %s matched POIs", config.max_extract)
 
-    handler = RestaurantPoiHandler(
-        categories=config.categories,
-        source_file=config.input_path,
-        snapshot_date=config.snapshot_date,
-    )
-    handler.apply_file(str(config.input_path), locations=True, idx="flex_mem")
+    total_objects = None
+    if config.show_progress and config.estimate_total_objects:
+        LOGGER.info("Estimating total OSM objects with osmium fileinfo -e.")
+        total_objects = estimate_total_osm_objects(config.input_path)
+        if total_objects is not None:
+            LOGGER.info("Estimated total OSM objects: %s", f"{total_objects:,}")
+
+    with tqdm(
+        total=total_objects,
+        desc="Reading OSM objects",
+        unit="obj",
+        unit_scale=True,
+        disable=not config.show_progress,
+        file=sys.stderr,
+    ) as progress_bar:
+        handler = RestaurantPoiHandler(
+            categories=config.categories,
+            source_file=config.input_path,
+            snapshot_date=config.snapshot_date,
+            max_extract=config.max_extract,
+            progress_bar=progress_bar,
+        )
+        try:
+            handler.apply_file(str(config.input_path), locations=True, idx="flex_mem")
+        except MaxExtractReached:
+            LOGGER.info("Stopped after reaching max extract limit of %s matched POIs.", config.max_extract)
+        progress_bar.set_postfix_str(f"matches={handler.matched_objects:,}", refresh=True)
 
     dataframe = build_dataframe(handler.records)
     summary = quality_summary(dataframe)
@@ -320,8 +418,16 @@ def extract(config: ExtractionConfig) -> tuple[pd.DataFrame, dict[str, object]]:
 
 def run(config: ExtractionConfig) -> None:
     dataframe, summary = extract(config)
-    write_parquet(dataframe, config.output_path)
-    summary_path = write_summary(summary, config.output_path)
+    write_parquet(dataframe, config.output_path, show_progress=config.show_progress)
+    with tqdm(
+        total=1,
+        desc="Writing summary",
+        unit="file",
+        disable=not config.show_progress,
+        file=sys.stderr,
+    ) as progress_bar:
+        summary_path = write_summary(summary, config.output_path)
+        progress_bar.update(1)
 
     LOGGER.info("Wrote Parquet: %s", config.output_path)
     LOGGER.info("Wrote summary: %s", summary_path)
@@ -351,6 +457,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="restaurant",
         help="Comma-separated amenity categories. MVP default: restaurant.",
     )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable tqdm progress bars.",
+    )
+    parser.add_argument(
+        "--no-estimate-total",
+        dest="estimate_total_objects",
+        action="store_false",
+        help="Do not run osmium fileinfo before extraction. The reading progress bar is shown without a percentage.",
+    )
+    parser.add_argument(
+        "--max-extract",
+        "--max_extract",
+        dest="max_extract",
+        type=int,
+        default=None,
+        help="Stop after extracting this many matched POIs. If omitted, all matches are extracted.",
+    )
     return parser
 
 
@@ -364,7 +489,13 @@ def main(argv: list[str] | None = None) -> int:
         output_path=args.output,
         snapshot_date=parse_snapshot_date(args.snapshot_date),
         categories=parse_categories(args.categories),
+        show_progress=not args.no_progress,
+        max_extract=args.max_extract,
+        estimate_total_objects=args.estimate_total_objects,
     )
+
+    if config.max_extract is not None and config.max_extract <= 0:
+        parser.error("--max-extract must be a positive integer")
 
     if not config.input_path.exists():
         parser.error(f"Input file does not exist: {config.input_path}")

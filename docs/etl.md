@@ -44,6 +44,50 @@ You can pass categories explicitly:
   --categories restaurant
 ```
 
+Limit extraction for quick tests:
+
+```bash
+.venv/bin/python etl/scripts/extract_food_pois.py \
+  --input data/raw/germany-latest.osm.pbf \
+  --output data/processed/food_pois_germany_sample_100.parquet \
+  --snapshot-date 2026-06-10 \
+  --max-extract 100
+```
+
+`--max_extract 100` is also accepted. If the option is omitted, all matching POIs are extracted.
+
+Progress bars are enabled by default:
+
+```text
+Reading OSM objects  12%|...| 61.2M/506M [08:33, 119kobj/s, matches=2,431]
+Writing Parquet    100%|...
+Writing summary    100%|...
+```
+
+By default, the ETL runs `osmium fileinfo -e` first to estimate the total number of OSM objects. This enables a percentage-based reading progress bar.
+
+Skip the estimate and keep the open-ended progress bar:
+
+```bash
+.venv/bin/python etl/scripts/extract_food_pois.py \
+  --input data/raw/germany-latest.osm.pbf \
+  --output data/processed/food_pois_germany_snapshot_20260610.parquet \
+  --snapshot-date 2026-06-10 \
+  --no-estimate-total
+```
+
+`--no-estimate-total` is also accepted and is the clearer option name.
+
+Disable progress bars entirely for non-interactive runs:
+
+```bash
+.venv/bin/python etl/scripts/extract_food_pois.py \
+  --input data/raw/germany-latest.osm.pbf \
+  --output data/processed/food_pois_germany_snapshot_20260610.parquet \
+  --snapshot-date 2026-06-10 \
+  --no-progress
+```
+
 ## Output
 
 The Parquet output contains stable columns for snapshot comparison:
