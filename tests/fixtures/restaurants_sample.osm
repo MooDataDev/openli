@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="OpenLI test fixture">
+  <node id="86001794" lat="52.5151119" lon="13.3889084">
+    <tag k="addr:city" v="Berlin"/>
+    <tag k="addr:country" v="DE"/>
+    <tag k="addr:housenumber" v="167;168"/>
+    <tag k="addr:postcode" v="10117"/>
+    <tag k="addr:street" v="Friedrichstraße"/>
+    <tag k="addr:suburb" v="Mitte"/>
+    <tag k="amenity" v="restaurant"/>
+    <tag k="contact:email" v="info@example.test"/>
+    <tag k="contact:phone" v="+49 30 20672828"/>
+    <tag k="contact:website" v="https://example.test/"/>
+    <tag k="cuisine" v="italian"/>
+    <tag k="image" v="https://example.test/image.jpg"/>
+    <tag k="name" v="Bocca di Bacco"/>
+    <tag k="opening_hours" v="Mo-Sa 12:00-24:00"/>
+    <tag k="operator" v="Example Operator"/>
+    <tag k="outdoor_seating" v="yes"/>
+    <tag k="smoking" v="no"/>
+    <tag k="wheelchair" v="no"/>
+  </node>
+  <node id="86001825" lat="52.5132123" lon="13.3911782">
+    <tag k="amenity" v="restaurant"/>
+    <tag k="cuisine" v="german"/>
+    <tag k="name" v="Lutter &amp; Wegner"/>
+    <tag k="phone" v="+49 30 20 29 54 0"/>
+    <tag k="website" v="https://www.example-restaurant.test/"/>
+    <tag k="website:menu" v="https://www.example-restaurant.test/menu.pdf"/>
+  </node>
+  <node id="1" lat="52.5100" lon="13.3900"/>
+  <node id="2" lat="52.5100" lon="13.3910"/>
+  <node id="3" lat="52.5110" lon="13.3910"/>
+  <node id="4" lat="52.5110" lon="13.3900"/>
+  <way id="100">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="1"/>
+    <tag k="amenity" v="restaurant"/>
+    <tag k="name" v="Polygon Restaurant"/>
+    <tag k="cuisine" v="vietnamese"/>
+  </way>
+</osm>
