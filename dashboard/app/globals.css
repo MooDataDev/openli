@@ -1,0 +1,59 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 221 45% 6%;
+  --foreground: 213 31% 91%;
+  --card: 219 45% 8%;
+  --card-foreground: 213 31% 91%;
+  --muted: 217 32% 17%;
+  --muted-foreground: 215 20% 65%;
+  --border: 216 34% 17%;
+  --input: 216 34% 17%;
+  --ring: 217 91% 60%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(3, 7, 18, 0.15), rgba(3, 7, 18, 0.92)),
+    #07111f;
+  color: hsl(var(--foreground));
+}
+
+button,
+select {
+  font: inherit;
+}
+
+.maplibregl-popup-content {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 15, 29, 0.94);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+  color: #e5eefb;
+  padding: 12px;
+}
+
+.maplibregl-popup-tip {
+  border-top-color: rgba(8, 15, 29, 0.94) !important;
+}
+
+.maplibregl-ctrl-group {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  background: rgba(15, 23, 42, 0.86) !important;
+}
+
+.maplibregl-ctrl button {
+  background-color: transparent !important;
+}
