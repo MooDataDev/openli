@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -371,6 +372,21 @@ def write_parquet(dataframe: pd.DataFrame, output_path: Path, show_progress: boo
         progress_bar.update(1)
 
 
+def latest_parquet_path(output_path: Path) -> Path:
+    latest_name = re.sub(r"_snapshot_\d{8}\.parquet$", "_snapshot_latest.parquet", output_path.name)
+    if latest_name == output_path.name:
+        latest_name = f"{output_path.stem}_latest{output_path.suffix}"
+    return output_path.with_name(latest_name)
+
+
+def write_latest_parquet_copy(output_path: Path) -> Path:
+    latest_path = latest_parquet_path(output_path)
+    if latest_path == output_path:
+        return latest_path
+    shutil.copy2(output_path, latest_path)
+    return latest_path
+
+
 def write_summary(summary: dict[str, object], output_path: Path) -> Path:
     summary_path = output_path.with_suffix(".summary.json")
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -419,6 +435,7 @@ def extract(config: ExtractionConfig) -> tuple[pd.DataFrame, dict[str, object]]:
 def run(config: ExtractionConfig) -> None:
     dataframe, summary = extract(config)
     write_parquet(dataframe, config.output_path, show_progress=config.show_progress)
+    latest_path = write_latest_parquet_copy(config.output_path)
     with tqdm(
         total=1,
         desc="Writing summary",
@@ -430,6 +447,7 @@ def run(config: ExtractionConfig) -> None:
         progress_bar.update(1)
 
     LOGGER.info("Wrote Parquet: %s", config.output_path)
+    LOGGER.info("Wrote latest Parquet: %s", latest_path)
     LOGGER.info("Wrote summary: %s", summary_path)
     LOGGER.info("Total POIs: %s", summary["total_pois"])
     LOGGER.info("Count by amenity: %s", summary["count_by_amenity"])
