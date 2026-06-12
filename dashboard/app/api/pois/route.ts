@@ -13,7 +13,7 @@ type CacheEntry = {
 };
 
 let cache: CacheEntry | null = null;
-const CACHE_TTL_MS = 15_000;
+const CACHE_TTL_MS = 5 * 60_000;
 
 function pythonBinary() {
   return (
@@ -32,8 +32,8 @@ export async function GET() {
   try {
     const { stdout } = await execFileAsync(pythonBinary(), [scriptPath], {
       cwd: process.cwd(),
-      maxBuffer: 50 * 1024 * 1024,
-      timeout: 30_000,
+      maxBuffer: 160 * 1024 * 1024,
+      timeout: 60_000,
     });
     const payload = JSON.parse(stdout);
     cache = { createdAt: Date.now(), payload };

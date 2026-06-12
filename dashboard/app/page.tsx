@@ -9,7 +9,7 @@ import { KpiPanel } from "@/components/kpi-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Filters, Poi, PoiApiResponse } from "@/lib/types";
-import { cuisineTokens, formatNumber, formatPercent, titleCase } from "@/lib/utils";
+import { formatNumber, formatPercent } from "@/lib/utils";
 
 const PoiMap = dynamic(() => import("@/components/poi-map"), {
   ssr: false,
@@ -50,7 +50,7 @@ function applyFilters(pois: Poi[], filters: Filters) {
     if (filters.country !== "all" && poi.country !== filters.country) return false;
     if (filters.city !== "all" && poi.city !== filters.city) return false;
     if (filters.amenity !== "all" && poi.amenity !== filters.amenity) return false;
-    if (filters.cuisine !== "all" && !cuisineTokens(poi.cuisine).includes(filters.cuisine)) return false;
+    if (filters.cuisine !== "all" && !poi.cuisineTokens.includes(filters.cuisine)) return false;
     if (filters.hasWebsite && !poi.hasWebsite) return false;
     if (filters.hasMenuUrl && !poi.hasMenuUrl) return false;
     return true;
@@ -101,7 +101,8 @@ export default function Home() {
   const cuisineData = useMemo(() => {
     const counts = new Map<string, number>();
     filteredPois.forEach((poi) => {
-      cuisineTokens(poi.cuisine).forEach((token) => counts.set(titleCase(token), (counts.get(titleCase(token)) ?? 0) + 1));
+      if (!poi.cuisinePrimary) return;
+      counts.set(poi.cuisinePrimary, (counts.get(poi.cuisinePrimary) ?? 0) + 1);
     });
     return [...counts.entries()]
       .map(([name, value]) => ({ name, value }))

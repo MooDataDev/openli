@@ -1,4 +1,7 @@
 .venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
 
 # JavaScript / Next.js dependencies and build output
 node_modules/

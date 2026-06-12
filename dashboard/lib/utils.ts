@@ -18,12 +18,3 @@ export function titleCase(value: string) {
     .replace(/[_-]/g, " ")
     .replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
 }
-
-export function cuisineTokens(value: string | null) {
-  if (!value) return [];
-  return value
-    .replace(/;/g, ",")
-    .split(",")
-    .map((token) => token.trim())
-    .filter(Boolean);
-}

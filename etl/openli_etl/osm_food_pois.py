@@ -21,6 +21,8 @@ from shapely import wkb
 from shapely.geometry import LineString, Point, Polygon
 from tqdm import tqdm
 
+from openli_etl.cuisine_normalization import add_cuisine_columns
+
 
 LOGGER = logging.getLogger("openli_etl.osm_food_pois")
 
@@ -65,6 +67,14 @@ OUTPUT_COLUMNS = [
     "name",
     "amenity",
     "cuisine",
+    "cuisine_raw",
+    "cuisine_tokens",
+    "cuisine_primary",
+    "cuisine_primary_type",
+    "cuisine_country",
+    "cuisine_country_code",
+    "cuisine_is_multi",
+    "cuisine_token_count",
     "brand",
     "operator",
     "website",
@@ -315,7 +325,8 @@ def build_dataframe(records: list[dict[str, object]]) -> pd.DataFrame:
     dataframe = dataframe[OUTPUT_COLUMNS]
     dataframe["lat"] = pd.to_numeric(dataframe["lat"], errors="coerce")
     dataframe["lon"] = pd.to_numeric(dataframe["lon"], errors="coerce")
-    return dataframe
+    dataframe = add_cuisine_columns(dataframe)
+    return dataframe[OUTPUT_COLUMNS]
 
 
 def quality_summary(dataframe: pd.DataFrame) -> dict[str, object]:
@@ -344,21 +355,25 @@ def quality_summary(dataframe: pd.DataFrame) -> dict[str, object]:
     }
 
 
+def schema_for_output_columns() -> pa.Schema:
+    fields = []
+    for column in OUTPUT_COLUMNS:
+        if column in {"lat", "lon"}:
+            fields.append(pa.field(column, pa.float64()))
+        elif column == "geometry":
+            fields.append(pa.field(column, pa.binary()))
+        elif column == "cuisine_is_multi":
+            fields.append(pa.field(column, pa.bool_()))
+        elif column == "cuisine_token_count":
+            fields.append(pa.field(column, pa.int64()))
+        else:
+            fields.append(pa.field(column, pa.string()))
+    return pa.schema(fields)
+
+
 def write_parquet(dataframe: pd.DataFrame, output_path: Path, show_progress: bool = True) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    schema = pa.schema(
-        [
-            pa.field("osm_id", pa.string()),
-            pa.field("osm_type", pa.string()),
-            *[pa.field(column, pa.string()) for column in OUTPUT_COLUMNS[2:31]],
-            pa.field("lat", pa.float64()),
-            pa.field("lon", pa.float64()),
-            pa.field("geometry", pa.binary()),
-            pa.field("source_file", pa.string()),
-            pa.field("extraction_timestamp", pa.string()),
-            pa.field("snapshot_date", pa.string()),
-        ]
-    )
+    schema = schema_for_output_columns()
     with tqdm(
         total=2,
         desc="Writing Parquet",
@@ -373,6 +388,8 @@ def write_parquet(dataframe: pd.DataFrame, output_path: Path, show_progress: boo
 
 
 def latest_parquet_path(output_path: Path) -> Path:
+    if output_path.name.endswith("_snapshot_latest.parquet"):
+        return output_path
     latest_name = re.sub(r"_snapshot_\d{8}\.parquet$", "_snapshot_latest.parquet", output_path.name)
     if latest_name == output_path.name:
         latest_name = f"{output_path.stem}_latest{output_path.suffix}"

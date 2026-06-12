@@ -151,6 +151,15 @@ The Parquet output contains stable columns for snapshot comparison:
 
 - `osm_id`, `osm_type`
 - name and restaurant tags such as `name`, `amenity`, `cuisine`, `brand`, `operator`
+- normalized cuisine fields:
+  - `cuisine_raw`
+  - `cuisine_tokens`
+  - `cuisine_primary`
+  - `cuisine_primary_type`
+  - `cuisine_country`
+  - `cuisine_country_code`
+  - `cuisine_is_multi`
+  - `cuisine_token_count`
 - website, menu, phone, email, address, access, and seating fields
 - `lat`, `lon`
 - `geometry`, a WKB geometry column in EPSG:4326
@@ -159,6 +168,22 @@ The Parquet output contains stable columns for snapshot comparison:
 A JSON summary is written next to the Parquet file with counts and data quality metrics.
 
 For convenience, each run also writes a `snapshot_latest.parquet` copy next to the dated snapshot. Use dated files for historical comparisons and `latest` for dashboards or notebooks that should always read the newest run.
+
+## Cuisine preprocessing
+
+Cuisine normalization is applied during extraction. Existing latest Parquet files can be backfilled in place:
+
+```bash
+.venv/bin/python etl/scripts/preprocess_parquet_cuisines.py
+```
+
+Preview the affected files:
+
+```bash
+.venv/bin/python etl/scripts/preprocess_parquet_cuisines.py --dry-run
+```
+
+The preprocessing keeps raw OSM cuisine values and adds normalized fields for filtering, charting, and country/regional cuisine analysis.
 
 ## Scaling notes
 
