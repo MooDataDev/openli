@@ -392,6 +392,11 @@ def write_summary(summary: dict[str, object], output_path: Path) -> Path:
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary_path
 
+def latest_write_summary(summary: dict[str, object], output_path: Path) -> Path:
+    summary_path = latest_parquet_path(output_path)
+    summary_path = summary_path.with_suffix(".summary.json")
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return summary_path
 
 def extract(config: ExtractionConfig) -> tuple[pd.DataFrame, dict[str, object]]:
     LOGGER.info("Reading OSM file: %s", config.input_path)
@@ -443,7 +448,8 @@ def run(config: ExtractionConfig) -> None:
         disable=not config.show_progress,
         file=sys.stderr,
     ) as progress_bar:
-        summary_path = write_summary(summary, config.output_path)
+        _ = write_summary(summary, config.output_path)
+        summary_path = latest_write_summary(summary, config.output_path)
         progress_bar.update(1)
 
     LOGGER.info("Wrote Parquet: %s", config.output_path)

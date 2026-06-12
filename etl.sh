@@ -241,9 +241,9 @@ process_country() {
 
 load_countries() {
   local countries=()
-  local line country url
+  local line country url continent
 
-  while IFS=$'\t' read -r country url; do
+  while IFS=$'\t' read -r country url continent; do
     [[ -z "${country}" ]] && continue
     [[ "${country}" =~ ^# ]] && continue
     if [[ -n "${COUNTRY_FILTER}" && "${country}" != "${COUNTRY_FILTER}" ]]; then

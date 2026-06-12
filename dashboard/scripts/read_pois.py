@@ -16,9 +16,13 @@ COUNTRY_NAMES = {
     "AL": "Albania",
     "AT": "Austria",
     "DE": "Germany",
+    "NZ": "New Zealand",
+    "TH": "Thailand",
     "albania": "Albania",
     "austria": "Austria",
     "germany": "Germany",
+    "new_zealand": "New Zealand",
+    "thailand": "Thailand",
 }
 
 

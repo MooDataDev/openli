@@ -208,7 +208,7 @@ export default function Home() {
       <footer className="mt-5 flex flex-col gap-3 border-t border-white/10 py-5 text-sm text-slate-400 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="font-semibold text-slate-200">OpenLI</div>
-          <div className="text-xs">OpenStreetMap-derived restaurant intelligence.</div>
+          <div className="text-xs">OpenStreetMap-derived location intelligence.</div>
         </div>
         <div className="flex flex-wrap gap-4">
           <span>Imprint</span>
