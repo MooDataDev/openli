@@ -29,7 +29,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "Inter", "ui-sans-serif", "system-ui"],
+        sans: ["Geist Sans", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       boxShadow: {
         glow: "0 24px 90px rgba(37, 99, 235, 0.18)",
