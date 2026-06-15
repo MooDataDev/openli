@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
 
 import type { Poi } from "@/lib/types";
@@ -8,6 +8,7 @@ import { titleCase } from "@/lib/utils";
 
 type PoiMapProps = {
   pois: Poi[];
+  onViewportPoisChange?: (pois: Poi[]) => void;
 };
 
 const EMPTY_FEATURE_COLLECTION = {
@@ -15,34 +16,58 @@ const EMPTY_FEATURE_COLLECTION = {
   features: [],
 };
 
-export default function PoiMap({ pois }: PoiMapProps) {
+function buildGeojson(pois: Poi[]) {
+  return {
+    type: "FeatureCollection",
+    features: pois.map((poi) => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [poi.lon, poi.lat],
+      },
+      properties: {
+        id: poi.id,
+        name: poi.name,
+        country: poi.country,
+        city: poi.city,
+        amenity: titleCase(poi.amenity),
+        cuisine: poi.cuisine || "Unknown cuisine",
+        hasWebsite: poi.hasWebsite ? "Website" : "No website",
+        hasMenuUrl: poi.hasMenuUrl ? "Menu" : "No menu",
+      },
+    })),
+  };
+}
+
+function fitToPois(map: MapLibreMap, pois: Poi[]) {
+  if (pois.length === 0) return;
+
+  const bounds = new maplibregl.LngLatBounds();
+  pois.forEach((poi) => bounds.extend([poi.lon, poi.lat]));
+  map.fitBounds(bounds, { padding: 70, maxZoom: 8, duration: 650 });
+}
+
+export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const loadedRef = useRef(false);
+  const poisRef = useRef<Poi[]>(pois);
 
-  const geojson = useMemo(
-    () => ({
-      type: "FeatureCollection",
-      features: pois.map((poi) => ({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [poi.lon, poi.lat],
-        },
-        properties: {
-          id: poi.id,
-          name: poi.name,
-          country: poi.country,
-          city: poi.city,
-          amenity: titleCase(poi.amenity),
-          cuisine: poi.cuisine || "Unknown cuisine",
-          hasWebsite: poi.hasWebsite ? "Website" : "No website",
-          hasMenuUrl: poi.hasMenuUrl ? "Menu" : "No menu",
-        },
-      })),
-    }),
-    [pois],
-  );
+  useEffect(() => {
+    poisRef.current = pois;
+  }, [pois]);
+
+  const geojson = useMemo(() => buildGeojson(pois), [pois]);
+
+  const updateViewportPois = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || !onViewportPoisChange) return;
+
+    const bounds = map.getBounds();
+    onViewportPoisChange(
+      poisRef.current.filter((poi) => bounds.contains([poi.lon, poi.lat])),
+    );
+  }, [onViewportPoisChange]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -57,12 +82,14 @@ export default function PoiMap({ pois }: PoiMapProps) {
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    map.on("moveend", updateViewportPois);
+    map.on("zoomend", updateViewportPois);
 
     map.on("load", () => {
       loadedRef.current = true;
       map.addSource("pois", {
         type: "geojson",
-        data: geojson as never,
+        data: buildGeojson(poisRef.current) as never,
         cluster: true,
         clusterMaxZoom: 12,
         clusterRadius: 46,
@@ -148,16 +175,21 @@ export default function PoiMap({ pois }: PoiMapProps) {
       map.on("mouseleave", "unclustered-point", () => {
         map.getCanvas().style.cursor = "";
       });
+
+      updateViewportPois();
+      fitToPois(map, poisRef.current);
     });
 
     mapRef.current = map;
 
     return () => {
+      map.off("moveend", updateViewportPois);
+      map.off("zoomend", updateViewportPois);
       map.remove();
       mapRef.current = null;
       loadedRef.current = false;
     };
-  }, [geojson]);
+  }, [updateViewportPois]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -167,11 +199,11 @@ export default function PoiMap({ pois }: PoiMapProps) {
     source?.setData((geojson.features.length ? geojson : EMPTY_FEATURE_COLLECTION) as never);
 
     if (pois.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      pois.forEach((poi) => bounds.extend([poi.lon, poi.lat]));
-      map.fitBounds(bounds, { padding: 70, maxZoom: 8, duration: 650 });
+      fitToPois(map, pois);
+    } else {
+      onViewportPoisChange?.([]);
     }
-  }, [geojson, pois]);
+  }, [geojson, pois, onViewportPoisChange]);
 
   return (
     <div className="relative h-[520px] overflow-hidden rounded-lg border border-white/10 bg-slate-950 shadow-panel xl:h-[620px]">

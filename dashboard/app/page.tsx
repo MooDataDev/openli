@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Database, MapPinned, RefreshCw } from "lucide-react";
 
 import { FilterSidebar } from "@/components/filter-sidebar";
@@ -62,9 +62,23 @@ function coverage(items: Poi[], field: "hasWebsite" | "hasMenuUrl") {
   return items.filter((item) => item[field]).length / items.length;
 }
 
+function countCuisines(items: Poi[]) {
+  const counts = new Map<string, number>();
+  items.forEach((poi) => {
+    if (!poi.cuisinePrimary) return;
+    counts.set(poi.cuisinePrimary, (counts.get(poi.cuisinePrimary) ?? 0) + 1);
+  });
+  return [...counts.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8);
+}
+
 export default function Home() {
   const [data, setData] = useState<PoiApiResponse | null>(null);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [viewportPois, setViewportPois] = useState<Poi[]>([]);
+  const [hasViewportPois, setHasViewportPois] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,6 +105,11 @@ export default function Home() {
 
   const filteredPois = useMemo(() => applyFilters(data?.pois ?? [], filters), [data?.pois, filters]);
 
+  const handleViewportPoisChange = useCallback((pois: Poi[]) => {
+    setViewportPois(pois);
+    setHasViewportPois(true);
+  }, []);
+
   const countries = data?.countries ?? [];
   const cities = useMemo(() => {
     const source = filters.country === "all" ? data?.pois ?? [] : (data?.pois ?? []).filter((poi) => poi.country === filters.country);
@@ -98,17 +117,13 @@ export default function Home() {
   }, [data?.pois, filters.country]);
 
   const countryData = useMemo(() => countBy(filteredPois, (poi) => poi.country).slice(0, 8), [filteredPois]);
-  const cuisineData = useMemo(() => {
-    const counts = new Map<string, number>();
-    filteredPois.forEach((poi) => {
-      if (!poi.cuisinePrimary) return;
-      counts.set(poi.cuisinePrimary, (counts.get(poi.cuisinePrimary) ?? 0) + 1);
-    });
-    return [...counts.entries()]
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
-  }, [filteredPois]);
+  const cuisineData = useMemo(() => countCuisines(filteredPois), [filteredPois]);
+  const filteredPoiIds = useMemo(() => new Set(filteredPois.map((poi) => poi.id)), [filteredPois]);
+  const visibleViewportPois = useMemo(
+    () => (hasViewportPois ? viewportPois.filter((poi) => filteredPoiIds.has(poi.id)) : filteredPois),
+    [filteredPoiIds, filteredPois, hasViewportPois, viewportPois],
+  );
+  const viewportCuisineData = useMemo(() => countCuisines(visibleViewportPois), [visibleViewportPois]);
 
   const restaurants = filteredPois.filter((poi) => poi.amenity === "restaurant").length;
   const websiteCoverage = coverage(filteredPois, "hasWebsite");
@@ -185,11 +200,11 @@ export default function Home() {
                 {loading ? (
                   <div className="h-[520px] animate-pulse rounded-lg bg-slate-900/70 xl:h-[620px]" />
                 ) : (
-                  <PoiMap pois={filteredPois} />
+                  <PoiMap pois={filteredPois} onViewportPoisChange={handleViewportPoisChange} />
                 )}
               </div>
             </Card>
-            <DashboardCharts countryData={countryData} cuisineData={cuisineData} />
+            <DashboardCharts viewportCuisineData={viewportCuisineData} cuisineData={cuisineData} />
           </section>
 
           <aside>

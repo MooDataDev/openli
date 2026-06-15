@@ -5,8 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -54,75 +52,70 @@ function ChartTooltip({ active, label, payload }: ChartTooltipProps) {
   );
 }
 
+function CuisineBarChart({
+  data,
+  emptyLabel,
+}: {
+  data: ChartDatum[];
+  emptyLabel: string;
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="flex h-56 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-sm text-slate-400">
+        {emptyLabel}
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-56">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 18 }}>
+          <CartesianGrid stroke="rgba(148, 163, 184, 0.13)" horizontal={false} />
+          <XAxis type="number" hide />
+          <YAxis
+            dataKey="name"
+            type="category"
+            width={92}
+            tick={{ fill: "#cbd5e1", fontSize: 12 }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip cursor={{ fill: "rgba(59, 130, 246, 0.1)" }} content={<ChartTooltip />} />
+          <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export function DashboardCharts({
-  countryData,
+  viewportCuisineData,
   cuisineData,
 }: {
-  countryData: ChartDatum[];
+  viewportCuisineData: ChartDatum[];
   cuisineData: ChartDatum[];
 }) {
-  const topCountries = countryData.slice(0, 5);
-
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Card className="min-h-[280px]">
         <CardHeader>
-          <CardTitle>POIs by Country</CardTitle>
+          <CardTitle>Top Cuisines Visualized</CardTitle>
         </CardHeader>
-        <CardContent className="grid min-h-56 gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
-          <div className="h-52 min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <PieChart>
-                <Pie data={countryData} innerRadius={54} outerRadius={82} paddingAngle={3} dataKey="value">
-                  {countryData.map((entry, index) => (
-                    <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<ChartTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex min-w-0 flex-col justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            {topCountries.map((entry, index) => (
-              <div key={entry.name} className="flex items-center justify-between gap-3 text-xs">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  />
-                  <span className="truncate text-slate-300">{entry.name}</span>
-                </div>
-                <span className="font-semibold text-[#e2e8f0]">{entry.value.toLocaleString("en-US")}</span>
-              </div>
-            ))}
-          </div>
+        <CardContent>
+          <CuisineBarChart data={viewportCuisineData} emptyLabel="Move or zoom the map to populate this view." />
         </CardContent>
       </Card>
       <Card className="min-h-[280px]">
         <CardHeader>
           <CardTitle>Top Cuisines</CardTitle>
         </CardHeader>
-        <CardContent className="h-56">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <BarChart data={cuisineData} layout="vertical" margin={{ left: 8, right: 18 }}>
-              <CartesianGrid stroke="rgba(148, 163, 184, 0.13)" horizontal={false} />
-              <XAxis type="number" hide />
-              <YAxis
-                dataKey="name"
-                type="category"
-                width={92}
-                tick={{ fill: "#cbd5e1", fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip cursor={{ fill: "rgba(59, 130, 246, 0.1)" }} content={<ChartTooltip />} />
-              <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-                {cuisineData.map((entry, index) => (
-                  <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <CardContent>
+          <CuisineBarChart data={cuisineData} emptyLabel="No cuisine data for the selected filters." />
         </CardContent>
       </Card>
     </div>
