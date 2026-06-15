@@ -46,6 +46,15 @@ data/processed/food_pois_germany_snapshot_20260610.parquet
 data/processed/food_pois_germany_snapshot_latest.parquet
 ```
 
+After extraction, `etl.sh` also rebuilds the optimized dashboard cache:
+
+```text
+data/processed/dashboard_pois_latest.json
+data/processed/dashboard_pois_latest.json.gz
+```
+
+The dashboard reads the gzip cache first and falls back to Parquet only when the cache is missing.
+
 Run only one country:
 
 ```bash
@@ -184,6 +193,12 @@ Preview the affected files:
 ```
 
 The preprocessing keeps raw OSM cuisine values and adds normalized fields for filtering, charting, and country/regional cuisine analysis.
+
+Rebuild only the dashboard cache after preprocessing:
+
+```bash
+.venv/bin/python dashboard/scripts/build_dashboard_cache.py
+```
 
 ## Scaling notes
 

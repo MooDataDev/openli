@@ -57,7 +57,6 @@ function buildGeojson(pois: Poi[]) {
           city: poi.city,
           amenity: titleCase(poi.amenity),
           cuisine: poi.cuisineGroup || "Unknown cuisine",
-          cuisineRaw: poi.cuisineRaw || poi.cuisine || "",
           groupKey: poi.cuisineGroupKey || "unknown",
           markerColor: colorForGroup(poi.cuisineGroupKey),
           hasWebsite: poi.hasWebsite ? "Website" : "No website",
@@ -131,13 +130,6 @@ function popupContent(properties: Record<string, unknown>) {
     color: "#cbd5e1",
     fontSize: "12px",
   });
-
-  if (properties.cuisineRaw) {
-    appendText(root, `Raw: ${String(properties.cuisineRaw)}`, {
-      color: "#94a3b8",
-      fontSize: "11px",
-    });
-  }
 
   const linkRow = document.createElement("div");
   linkRow.style.color = "#7dd3fc";

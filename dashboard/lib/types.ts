@@ -8,14 +8,8 @@ export type Poi = {
   city: string;
   amenity: string;
   cuisine: string | null;
-  cuisineRaw: string | null;
-  cuisineTokens: string[];
-  cuisinePrimary: string | null;
-  cuisinePrimaryType: string;
-  cuisineCountry: string | null;
   cuisineGroup: string | null;
   cuisineGroupKey: string | null;
-  cuisineGroupType: string;
   hasWebsite: boolean;
   hasMenuUrl: boolean;
   websiteUrl: string | null;

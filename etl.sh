@@ -7,6 +7,7 @@ RAW_DIR="${ROOT_DIR}/data/raw"
 PROCESSED_DIR="${ROOT_DIR}/data/processed"
 PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
 PYTHON_SCRIPT="${ROOT_DIR}/etl/scripts/extract_food_pois.py"
+DASHBOARD_CACHE_SCRIPT="${ROOT_DIR}/dashboard/scripts/build_dashboard_cache.py"
 SNAPSHOT_DATE="$(date +%Y-%m-%d)"
 PARALLEL=1
 FORCE=false
@@ -224,6 +225,11 @@ extract_country() {
   run_cmd "${python_args[@]}"
 }
 
+build_dashboard_cache() {
+  log "dashboard: building optimized POI cache"
+  run_cmd "${PYTHON_BIN}" "${DASHBOARD_CACHE_SCRIPT}"
+}
+
 process_country() {
   local country="$1"
   local url="$2"
@@ -314,6 +320,8 @@ main() {
   else
     load_countries | run_parallel
   fi
+
+  build_dashboard_cache
 }
 
 main "$@"

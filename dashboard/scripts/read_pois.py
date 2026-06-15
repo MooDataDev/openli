@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import glob
+import gzip
 import json
 import math
 import sys
@@ -11,6 +12,8 @@ import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT_DIR / "data" / "processed"
+CACHE_JSON_PATH = DATA_DIR / "dashboard_pois_latest.json"
+CACHE_GZIP_PATH = DATA_DIR / "dashboard_pois_latest.json.gz"
 ETL_ROOT = ROOT_DIR / "etl"
 sys.path.insert(0, str(ETL_ROOT))
 
@@ -80,6 +83,14 @@ def json_clean(value: object) -> object:
     return value
 
 
+def write_dashboard_cache(payload: dict[str, object]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+    CACHE_JSON_PATH.write_bytes(encoded)
+    with gzip.open(CACHE_GZIP_PATH, "wb", compresslevel=6) as output:
+        output.write(encoded)
+
+
 def read_latest_pois() -> dict[str, object]:
     files = sorted(Path(path) for path in glob.glob(str(DATA_DIR / "*_snapshot_latest.parquet")))
     pois: list[dict[str, object]] = []
@@ -107,9 +118,6 @@ def read_latest_pois() -> dict[str, object]:
             country_series.map(lambda value: continent_from_country(value, fallback=fallback_continent))
         )
         city_series = get_series(dataframe, "addr_city").combine_first(get_series(dataframe, "addr_suburb"))
-        cuisine_tokens = get_series(dataframe, "cuisine_tokens", "").fillna("").map(
-            lambda value: [token for token in str(value).split("|") if token]
-        )
 
         selected = pd.DataFrame(
             {
@@ -121,14 +129,8 @@ def read_latest_pois() -> dict[str, object]:
                 "city": city_series.fillna("Unknown"),
                 "amenity": get_series(dataframe, "amenity").fillna("unknown"),
                 "cuisine": get_series(dataframe, "cuisine"),
-                "cuisineRaw": get_series(dataframe, "cuisine_raw").combine_first(get_series(dataframe, "cuisine")),
-                "cuisineTokens": cuisine_tokens,
-                "cuisinePrimary": get_series(dataframe, "cuisine_primary"),
-                "cuisinePrimaryType": get_series(dataframe, "cuisine_primary_type").fillna("unknown"),
-                "cuisineCountry": get_series(dataframe, "cuisine_country"),
                 "cuisineGroup": get_series(dataframe, "cuisine_group"),
                 "cuisineGroupKey": get_series(dataframe, "cuisine_group_key"),
-                "cuisineGroupType": get_series(dataframe, "cuisine_group_type").fillna("unknown"),
                 "hasWebsite": any_present(dataframe, ["website_url", "website", "contact_website"]),
                 "hasMenuUrl": any_present(dataframe, ["menu_url", "website_menu"]),
                 "websiteUrl": first_present(dataframe, ["website_url", "website", "contact_website"]),
@@ -169,4 +171,7 @@ def read_latest_pois() -> dict[str, object]:
 
 
 if __name__ == "__main__":
-    print(json.dumps(read_latest_pois(), ensure_ascii=False, allow_nan=False, separators=(",", ":")))
+    payload = read_latest_pois()
+    if "--write-cache" in sys.argv:
+        write_dashboard_cache(payload)
+    print(json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")))
