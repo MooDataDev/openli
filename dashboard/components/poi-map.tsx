@@ -16,6 +16,31 @@ const EMPTY_FEATURE_COLLECTION = {
   features: [],
 };
 
+const GROUP_COLORS = [
+  "#38bdf8",
+  "#22c55e",
+  "#f59e0b",
+  "#a855f7",
+  "#ec4899",
+  "#14b8a6",
+  "#f97316",
+  "#84cc16",
+  "#6366f1",
+  "#ef4444",
+  "#06b6d4",
+  "#eab308",
+];
+
+function colorForGroup(groupKey: string | null) {
+  if (!groupKey) return "#64748b";
+
+  let hash = 0;
+  for (const character of groupKey) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return GROUP_COLORS[hash % GROUP_COLORS.length];
+}
+
 function buildGeojson(pois: Poi[]) {
   return {
     type: "FeatureCollection",
@@ -33,8 +58,12 @@ function buildGeojson(pois: Poi[]) {
           amenity: titleCase(poi.amenity),
           cuisine: poi.cuisineGroup || "Unknown cuisine",
           cuisineRaw: poi.cuisineRaw || poi.cuisine || "",
+          groupKey: poi.cuisineGroupKey || "unknown",
+          markerColor: colorForGroup(poi.cuisineGroupKey),
           hasWebsite: poi.hasWebsite ? "Website" : "No website",
           hasMenuUrl: poi.hasMenuUrl ? "Menu" : "No menu",
+          websiteUrl: poi.websiteUrl || "",
+          menuUrl: poi.menuUrl || "",
         },
     })),
   };
@@ -48,13 +77,77 @@ function fitToPois(map: MapLibreMap, pois: Poi[]) {
   map.fitBounds(bounds, { padding: 70, maxZoom: 8, duration: 650 });
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function normalizeHref(value: unknown) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^(yes|no|unknown|none)$/i.test(trimmed)) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^\/\//.test(trimmed)) return `https:${trimmed}`;
+  if (!trimmed.includes(".")) return "";
+  return `https://${trimmed}`;
+}
+
+function appendText(parent: HTMLElement, text: string, style: Partial<CSSStyleDeclaration> = {}) {
+  const element = document.createElement("div");
+  element.textContent = text;
+  Object.assign(element.style, style);
+  parent.appendChild(element);
+}
+
+function linkOrText(label: string, url: unknown) {
+  const href = normalizeHref(url);
+  if (!href) {
+    const text = document.createElement("span");
+    text.textContent = label;
+    return text;
+  }
+
+  const link = document.createElement("a");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer nofollow";
+  link.textContent = label;
+  link.style.color = "#7dd3fc";
+  link.style.textDecoration = "underline";
+  link.style.textUnderlineOffset = "2px";
+  return link;
+}
+
+function popupContent(properties: Record<string, unknown>) {
+  const root = document.createElement("div");
+  root.style.display = "grid";
+  root.style.gap = "4px";
+
+  appendText(root, String(properties.name ?? ""), {
+    fontWeight: "700",
+    fontSize: "13px",
+  });
+  appendText(root, `${String(properties.city ?? "")}, ${String(properties.country ?? "")}`, {
+    color: "#94a3b8",
+    fontSize: "12px",
+  });
+  appendText(root, `${String(properties.amenity ?? "")} · ${String(properties.cuisine ?? "Unknown cuisine")}`, {
+    color: "#cbd5e1",
+    fontSize: "12px",
+  });
+
+  if (properties.cuisineRaw) {
+    appendText(root, `Raw: ${String(properties.cuisineRaw)}`, {
+      color: "#94a3b8",
+      fontSize: "11px",
+    });
+  }
+
+  const linkRow = document.createElement("div");
+  linkRow.style.color = "#7dd3fc";
+  linkRow.style.fontSize = "12px";
+  linkRow.appendChild(linkOrText(String(properties.hasWebsite ?? "No website"), properties.websiteUrl));
+  linkRow.append(" · ");
+  linkRow.appendChild(linkOrText(String(properties.hasMenuUrl ?? "No menu"), properties.menuUrl));
+  root.appendChild(linkRow);
+
+  return root;
 }
 
 export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
@@ -68,6 +161,23 @@ export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
   }, [pois]);
 
   const geojson = useMemo(() => buildGeojson(pois), [pois]);
+  const legendItems = useMemo(() => {
+    const counts = new Map<string, { key: string | null; label: string; count: number }>();
+    pois.forEach((poi) => {
+      const label = poi.cuisineGroup || "Unknown cuisine";
+      const existing = counts.get(label);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        counts.set(label, {
+          key: poi.cuisineGroupKey,
+          label,
+          count: 1,
+        });
+      }
+    });
+    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 6);
+  }, [pois]);
 
   const updateViewportPois = useCallback(() => {
     const map = mapRef.current;
@@ -138,8 +248,8 @@ export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
         source: "pois",
         filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-color": "#38bdf8",
-          "circle-radius": 5,
+          "circle-color": ["get", "markerColor"],
+          "circle-radius": 5.5,
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 1.2,
         },
@@ -158,20 +268,11 @@ export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
         const feature = event.features?.[0];
         if (!feature || feature.geometry.type !== "Point") return;
         const coordinates = feature.geometry.coordinates.slice() as [number, number];
-        const properties = feature.properties as Record<string, string>;
-        const rawCuisine = properties.cuisineRaw ? escapeHtml(properties.cuisineRaw) : "";
+        const properties = feature.properties as Record<string, unknown>;
 
         new maplibregl.Popup({ closeButton: false, offset: 14 })
           .setLngLat(coordinates)
-          .setHTML(
-            `<div class="space-y-1">
-              <div style="font-weight:700;font-size:13px">${escapeHtml(properties.name)}</div>
-              <div style="color:#94a3b8;font-size:12px">${escapeHtml(properties.city)}, ${escapeHtml(properties.country)}</div>
-              <div style="color:#cbd5e1;font-size:12px">${escapeHtml(properties.amenity)} · ${escapeHtml(properties.cuisine)}</div>
-              ${rawCuisine ? `<div style="color:#94a3b8;font-size:11px">Raw: ${rawCuisine}</div>` : ""}
-              <div style="color:#7dd3fc;font-size:12px">${escapeHtml(properties.hasWebsite)} · ${escapeHtml(properties.hasMenuUrl)}</div>
-            </div>`,
-          )
+          .setDOMContent(popupContent(properties))
           .addTo(map);
       });
 
@@ -223,6 +324,25 @@ export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
       <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-white/10 bg-slate-950/72 px-3 py-2 text-xs text-slate-300 backdrop-blur-md">
         {pois.length.toLocaleString("en-US")} visible POIs
       </div>
+      {legendItems.length > 0 ? (
+        <div className="pointer-events-none absolute bottom-4 left-4 max-w-[240px] rounded-lg border border-white/10 bg-slate-950/76 px-3 py-2 text-xs text-slate-300 shadow-panel backdrop-blur-md">
+          <div className="mb-2 font-semibold text-slate-100">Cuisine groups</div>
+          <div className="space-y-1.5">
+            {legendItems.map((item) => (
+              <div key={item.label} className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: colorForGroup(item.key) }}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </div>
+                <span className="font-medium text-slate-100">{item.count.toLocaleString("en-US")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

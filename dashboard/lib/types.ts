@@ -18,6 +18,8 @@ export type Poi = {
   cuisineGroupType: string;
   hasWebsite: boolean;
   hasMenuUrl: boolean;
+  websiteUrl: string | null;
+  menuUrl: string | null;
   lat: number;
   lon: number;
 };

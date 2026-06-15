@@ -54,6 +54,14 @@ def any_present(dataframe: pd.DataFrame, columns: list[str]) -> pd.Series:
     return dataframe[available].notna().any(axis=1)
 
 
+def first_present(dataframe: pd.DataFrame, columns: list[str]) -> pd.Series:
+    result = pd.Series(None, index=dataframe.index, dtype="object")
+    for column in columns:
+        if column in dataframe.columns:
+            result = result.combine_first(dataframe[column])
+    return result
+
+
 def json_clean(value: object) -> object:
     if isinstance(value, list):
         return [cleaned for item in value if (cleaned := json_clean(item)) is not None]
@@ -123,6 +131,8 @@ def read_latest_pois() -> dict[str, object]:
                 "cuisineGroupType": get_series(dataframe, "cuisine_group_type").fillna("unknown"),
                 "hasWebsite": any_present(dataframe, ["website_url", "website", "contact_website"]),
                 "hasMenuUrl": any_present(dataframe, ["menu_url", "website_menu"]),
+                "websiteUrl": first_present(dataframe, ["website_url", "website", "contact_website"]),
+                "menuUrl": first_present(dataframe, ["menu_url", "website_menu"]),
                 "lat": dataframe["lat"].astype(float),
                 "lon": dataframe["lon"].astype(float),
             }
