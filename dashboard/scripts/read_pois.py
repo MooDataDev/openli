@@ -82,7 +82,7 @@ def read_latest_pois() -> dict[str, object]:
         dataframe = pd.read_parquet(file_path)
         dataframe = dataframe[dataframe["lat"].notna() & dataframe["lon"].notna()].copy()
 
-        if "cuisine_tokens" not in dataframe.columns:
+        if "cuisine_tokens" not in dataframe.columns or "cuisine_group" not in dataframe.columns:
             from openli_etl.cuisine_normalization import add_cuisine_columns
 
             dataframe = add_cuisine_columns(dataframe)
@@ -118,6 +118,9 @@ def read_latest_pois() -> dict[str, object]:
                 "cuisinePrimary": get_series(dataframe, "cuisine_primary"),
                 "cuisinePrimaryType": get_series(dataframe, "cuisine_primary_type").fillna("unknown"),
                 "cuisineCountry": get_series(dataframe, "cuisine_country"),
+                "cuisineGroup": get_series(dataframe, "cuisine_group"),
+                "cuisineGroupKey": get_series(dataframe, "cuisine_group_key"),
+                "cuisineGroupType": get_series(dataframe, "cuisine_group_type").fillna("unknown"),
                 "hasWebsite": any_present(dataframe, ["website_url", "website", "contact_website"]),
                 "hasMenuUrl": any_present(dataframe, ["menu_url", "website_menu"]),
                 "lat": dataframe["lat"].astype(float),
@@ -134,12 +137,7 @@ def read_latest_pois() -> dict[str, object]:
     continents = sorted({poi["continent"] for poi in pois if poi["continent"] != "Unknown"})
     cities = sorted({poi["city"] for poi in pois if poi["city"] != "Unknown"})
     amenities = sorted({poi["amenity"] for poi in pois})
-    cuisine_values = {
-        str(token).strip()
-        for poi in pois
-        for token in poi.get("cuisineTokens", [])
-        if str(token).strip()
-    }
+    cuisine_values = {str(poi["cuisineGroup"]).strip() for poi in pois if clean(poi.get("cuisineGroup"))}
 
     return {
         "files": [str(path.relative_to(ROOT_DIR)) for path in files],

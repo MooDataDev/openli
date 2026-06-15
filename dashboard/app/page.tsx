@@ -52,7 +52,7 @@ function applyFilters(pois: Poi[], filters: Filters) {
     if (filters.continent !== "all" && poi.continent !== filters.continent) return false;
     if (filters.city !== "all" && poi.city !== filters.city) return false;
     if (filters.amenity !== "all" && poi.amenity !== filters.amenity) return false;
-    if (filters.cuisine !== "all" && !poi.cuisineTokens.includes(filters.cuisine)) return false;
+    if (filters.cuisine !== "all" && poi.cuisineGroup !== filters.cuisine) return false;
     if (filters.hasWebsite && !poi.hasWebsite) return false;
     if (filters.hasMenuUrl && !poi.hasMenuUrl) return false;
     return true;
@@ -67,8 +67,8 @@ function coverage(items: Poi[], field: "hasWebsite" | "hasMenuUrl") {
 function countCuisines(items: Poi[]) {
   const counts = new Map<string, number>();
   items.forEach((poi) => {
-    if (!poi.cuisinePrimary) return;
-    counts.set(poi.cuisinePrimary, (counts.get(poi.cuisinePrimary) ?? 0) + 1);
+    if (!poi.cuisineGroup) return;
+    counts.set(poi.cuisineGroup, (counts.get(poi.cuisineGroup) ?? 0) + 1);
   });
   return [...counts.entries()]
     .map(([name, value]) => ({ name, value }))

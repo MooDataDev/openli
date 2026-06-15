@@ -13,6 +13,9 @@ export type Poi = {
   cuisinePrimary: string | null;
   cuisinePrimaryType: string;
   cuisineCountry: string | null;
+  cuisineGroup: string | null;
+  cuisineGroupKey: string | null;
+  cuisineGroupType: string;
   hasWebsite: boolean;
   hasMenuUrl: boolean;
   lat: number;

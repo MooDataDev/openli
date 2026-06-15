@@ -25,16 +25,17 @@ function buildGeojson(pois: Poi[]) {
         type: "Point",
         coordinates: [poi.lon, poi.lat],
       },
-      properties: {
-        id: poi.id,
-        name: poi.name,
-        country: poi.country,
-        city: poi.city,
-        amenity: titleCase(poi.amenity),
-        cuisine: poi.cuisine || "Unknown cuisine",
-        hasWebsite: poi.hasWebsite ? "Website" : "No website",
-        hasMenuUrl: poi.hasMenuUrl ? "Menu" : "No menu",
-      },
+        properties: {
+          id: poi.id,
+          name: poi.name,
+          country: poi.country,
+          city: poi.city,
+          amenity: titleCase(poi.amenity),
+          cuisine: poi.cuisineGroup || "Unknown cuisine",
+          cuisineRaw: poi.cuisineRaw || poi.cuisine || "",
+          hasWebsite: poi.hasWebsite ? "Website" : "No website",
+          hasMenuUrl: poi.hasMenuUrl ? "Menu" : "No menu",
+        },
     })),
   };
 }
@@ -45,6 +46,15 @@ function fitToPois(map: MapLibreMap, pois: Poi[]) {
   const bounds = new maplibregl.LngLatBounds();
   pois.forEach((poi) => bounds.extend([poi.lon, poi.lat]));
   map.fitBounds(bounds, { padding: 70, maxZoom: 8, duration: 650 });
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
@@ -149,15 +159,17 @@ export default function PoiMap({ pois, onViewportPoisChange }: PoiMapProps) {
         if (!feature || feature.geometry.type !== "Point") return;
         const coordinates = feature.geometry.coordinates.slice() as [number, number];
         const properties = feature.properties as Record<string, string>;
+        const rawCuisine = properties.cuisineRaw ? escapeHtml(properties.cuisineRaw) : "";
 
         new maplibregl.Popup({ closeButton: false, offset: 14 })
           .setLngLat(coordinates)
           .setHTML(
             `<div class="space-y-1">
-              <div style="font-weight:700;font-size:13px">${properties.name}</div>
-              <div style="color:#94a3b8;font-size:12px">${properties.city}, ${properties.country}</div>
-              <div style="color:#cbd5e1;font-size:12px">${properties.amenity} · ${properties.cuisine}</div>
-              <div style="color:#7dd3fc;font-size:12px">${properties.hasWebsite} · ${properties.hasMenuUrl}</div>
+              <div style="font-weight:700;font-size:13px">${escapeHtml(properties.name)}</div>
+              <div style="color:#94a3b8;font-size:12px">${escapeHtml(properties.city)}, ${escapeHtml(properties.country)}</div>
+              <div style="color:#cbd5e1;font-size:12px">${escapeHtml(properties.amenity)} · ${escapeHtml(properties.cuisine)}</div>
+              ${rawCuisine ? `<div style="color:#94a3b8;font-size:11px">Raw: ${rawCuisine}</div>` : ""}
+              <div style="color:#7dd3fc;font-size:12px">${escapeHtml(properties.hasWebsite)} · ${escapeHtml(properties.hasMenuUrl)}</div>
             </div>`,
           )
           .addTo(map);
