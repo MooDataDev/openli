@@ -3,7 +3,6 @@ from __future__ import annotations
 import glob
 import json
 import math
-import re
 import sys
 from pathlib import Path
 
@@ -15,31 +14,12 @@ DATA_DIR = ROOT_DIR / "data" / "processed"
 ETL_ROOT = ROOT_DIR / "etl"
 sys.path.insert(0, str(ETL_ROOT))
 
-from openli_etl.cuisine_normalization import normalize_cuisine
-
-COUNTRY_NAMES = {
-    "AL": "Albania",
-    "AT": "Austria",
-    "BA": "Bosnia and Herzegovina",
-    "BE": "Belgium",
-    "CH": "Switzerland",
-    "CZ": "Czechia",
-    "DE": "Germany",
-    "FR": "France",
-    "IT": "Italy",
-    "LU": "Luxembourg",
-    "NL": "Netherlands",
-    "NZ": "New Zealand",
-    "PL": "Poland",
-    "SI": "Slovenia",
-    "TH": "Thailand",
-    "albania": "Albania",
-    "austria": "Austria",
-    "germany": "Germany",
-    "new-zealand": "New Zealand",
-    "new_zealand": "New Zealand",
-    "thailand": "Thailand",
-}
+from openli_etl.geo_normalization import (
+    continent_from_country,
+    continent_from_snapshot_path,
+    country_from_code_or_name,
+    country_from_snapshot_path,
+)
 
 
 def clean(value: object) -> str | None:
@@ -54,37 +34,11 @@ def clean(value: object) -> str | None:
 
 
 def country_from_path(path: Path) -> str:
-    match = re.match(r"food_pois_(.+)_snapshot_latest\.parquet$", path.name)
-    if not match:
-        return "Unknown"
-    value = match.group(1)
-    return COUNTRY_NAMES.get(value, value.replace("_", " ").replace("-", " ").title())
-
-
-def country_from_row(row: pd.Series, fallback: str) -> str:
-    raw = clean(row.get("addr_country"))
-    if raw:
-        code = raw.upper()
-        if code in COUNTRY_NAMES:
-            return COUNTRY_NAMES[code]
-        if raw in COUNTRY_NAMES:
-            return COUNTRY_NAMES[raw]
-    return fallback
+    return country_from_snapshot_path(path)
 
 
 def country_from_value(value: object, fallback: str) -> str:
-    raw = clean(value)
-    if raw:
-        code = raw.upper()
-        if code in COUNTRY_NAMES:
-            return COUNTRY_NAMES[code]
-        if raw in COUNTRY_NAMES:
-            return COUNTRY_NAMES[raw]
-    return fallback
-
-
-def has_value(*values: object) -> bool:
-    return any(clean(value) is not None for value in values)
+    return country_from_code_or_name(value, fallback=fallback)
 
 
 def get_series(dataframe: pd.DataFrame, column: str, default: object = None) -> pd.Series:
@@ -118,32 +72,6 @@ def json_clean(value: object) -> object:
     return value
 
 
-def normalized_cuisine_fields(row: pd.Series) -> dict[str, object]:
-    if "cuisine_tokens" in row.index:
-        cuisine_tokens = clean(row.get("cuisine_tokens"))
-        token_list = cuisine_tokens.split("|") if cuisine_tokens else []
-        return {
-            "cuisineRaw": clean(row.get("cuisine_raw")) or clean(row.get("cuisine")),
-            "cuisineTokens": token_list,
-            "cuisinePrimary": clean(row.get("cuisine_primary")),
-            "cuisinePrimaryType": clean(row.get("cuisine_primary_type")) or "unknown",
-            "cuisineCountry": clean(row.get("cuisine_country")),
-        }
-
-    normalized = normalize_cuisine(
-        row.get("cuisine"),
-        addr_country=row.get("addr_country"),
-        source_file=row.get("source_file"),
-    )
-    return {
-        "cuisineRaw": normalized.cuisine_raw,
-        "cuisineTokens": normalized.cuisine_tokens.split("|") if normalized.cuisine_tokens else [],
-        "cuisinePrimary": normalized.cuisine_primary,
-        "cuisinePrimaryType": normalized.cuisine_primary_type,
-        "cuisineCountry": normalized.cuisine_country,
-    }
-
-
 def read_latest_pois() -> dict[str, object]:
     files = sorted(Path(path) for path in glob.glob(str(DATA_DIR / "*_snapshot_latest.parquet")))
     pois: list[dict[str, object]] = []
@@ -166,6 +94,10 @@ def read_latest_pois() -> dict[str, object]:
 
         country_codes = get_series(dataframe, "addr_country")
         country_series = country_codes.map(lambda value: country_from_value(value, fallback_country))
+        fallback_continent = continent_from_snapshot_path(file_path)
+        continent_series = get_series(dataframe, "continent").combine_first(
+            country_series.map(lambda value: continent_from_country(value, fallback=fallback_continent))
+        )
         city_series = get_series(dataframe, "addr_city").combine_first(get_series(dataframe, "addr_suburb"))
         cuisine_tokens = get_series(dataframe, "cuisine_tokens", "").fillna("").map(
             lambda value: [token for token in str(value).split("|") if token]
@@ -176,6 +108,7 @@ def read_latest_pois() -> dict[str, object]:
                 "osmId": get_series(dataframe, "osm_id"),
                 "osmType": get_series(dataframe, "osm_type"),
                 "name": get_series(dataframe, "name").fillna("Unnamed place"),
+                "continent": continent_series.fillna("Unknown"),
                 "country": country_series,
                 "city": city_series.fillna("Unknown"),
                 "amenity": get_series(dataframe, "amenity").fillna("unknown"),
@@ -198,6 +131,7 @@ def read_latest_pois() -> dict[str, object]:
             pois.append(record)
 
     countries = sorted({poi["country"] for poi in pois})
+    continents = sorted({poi["continent"] for poi in pois if poi["continent"] != "Unknown"})
     cities = sorted({poi["city"] for poi in pois if poi["city"] != "Unknown"})
     amenities = sorted({poi["amenity"] for poi in pois})
     cuisine_values = {
@@ -211,6 +145,7 @@ def read_latest_pois() -> dict[str, object]:
         "files": [str(path.relative_to(ROOT_DIR)) for path in files],
         "snapshotDate": max(snapshot_dates) if snapshot_dates else None,
         "pois": pois,
+        "continents": continents,
         "countries": countries,
         "cities": cities,
         "amenities": amenities,

@@ -3,6 +3,7 @@ export type Poi = {
   osmId: string | null;
   osmType: string | null;
   name: string;
+  continent: string;
   country: string;
   city: string;
   amenity: string;
@@ -22,6 +23,7 @@ export type PoiApiResponse = {
   files: string[];
   snapshotDate: string | null;
   pois: Poi[];
+  continents: string[];
   countries: string[];
   cities: string[];
   amenities: string[];
@@ -38,6 +40,7 @@ export type PoiApiResponse = {
 };
 
 export type Filters = {
+  continent: string;
   country: string;
   city: string;
   amenity: string;

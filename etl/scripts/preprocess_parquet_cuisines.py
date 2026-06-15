@@ -12,6 +12,7 @@ ETL_ROOT = PROJECT_ROOT / "etl"
 sys.path.insert(0, str(ETL_ROOT))
 
 from openli_etl.cuisine_normalization import add_cuisine_columns
+from openli_etl.geo_normalization import add_continent_column
 from openli_etl.osm_food_pois import write_parquet, write_summary, quality_summary, latest_parquet_path
 
 
@@ -44,7 +45,8 @@ def main() -> int:
 
         dataframe = pd.read_parquet(path)
         row_count = len(dataframe)
-        enriched = add_cuisine_columns(dataframe)
+        enriched = add_continent_column(dataframe, source_path=path)
+        enriched = add_cuisine_columns(enriched)
         if len(enriched) != row_count:
             raise RuntimeError(f"Row count changed for {path}: {row_count} -> {len(enriched)}")
 

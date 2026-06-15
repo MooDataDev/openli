@@ -25,6 +25,7 @@ const DashboardCharts = dynamic(() => import("@/components/charts").then((mod) =
 });
 
 const DEFAULT_FILTERS: Filters = {
+  continent: "all",
   country: "all",
   city: "all",
   amenity: "all",
@@ -48,6 +49,7 @@ function countBy(items: Poi[], key: (poi: Poi) => string | null | undefined) {
 function applyFilters(pois: Poi[], filters: Filters) {
   return pois.filter((poi) => {
     if (filters.country !== "all" && poi.country !== filters.country) return false;
+    if (filters.continent !== "all" && poi.continent !== filters.continent) return false;
     if (filters.city !== "all" && poi.city !== filters.city) return false;
     if (filters.amenity !== "all" && poi.amenity !== filters.amenity) return false;
     if (filters.cuisine !== "all" && !poi.cuisineTokens.includes(filters.cuisine)) return false;
@@ -110,11 +112,21 @@ export default function Home() {
     setHasViewportPois(true);
   }, []);
 
-  const countries = data?.countries ?? [];
+  const continents = data?.continents ?? [];
+  const countries = useMemo(() => {
+    const source = filters.continent === "all"
+      ? data?.pois ?? []
+      : (data?.pois ?? []).filter((poi) => poi.continent === filters.continent);
+    return [...new Set(source.map((poi) => poi.country).filter((country) => country !== "Unknown"))].sort();
+  }, [data?.pois, filters.continent]);
   const cities = useMemo(() => {
-    const source = filters.country === "all" ? data?.pois ?? [] : (data?.pois ?? []).filter((poi) => poi.country === filters.country);
+    const source = (data?.pois ?? []).filter((poi) => {
+      if (filters.continent !== "all" && poi.continent !== filters.continent) return false;
+      if (filters.country !== "all" && poi.country !== filters.country) return false;
+      return true;
+    });
     return [...new Set(source.map((poi) => poi.city).filter((city) => city !== "Unknown"))].sort();
-  }, [data?.pois, filters.country]);
+  }, [data?.pois, filters.continent, filters.country]);
 
   const countryData = useMemo(() => countBy(filteredPois, (poi) => poi.country).slice(0, 8), [filteredPois]);
   const cuisineData = useMemo(() => countCuisines(filteredPois), [filteredPois]);
@@ -173,6 +185,7 @@ export default function Home() {
           <aside className="2xl:sticky 2xl:top-4 2xl:h-[calc(100vh-2rem)]">
             <FilterSidebar
               filters={filters}
+              continents={continents}
               countries={countries}
               cities={cities}
               amenities={data?.amenities ?? []}

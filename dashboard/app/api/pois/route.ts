@@ -45,6 +45,7 @@ export async function GET() {
         error: "Failed to load local Parquet snapshots.",
         detail: message,
         pois: [],
+        continents: [],
         countries: [],
         cities: [],
         amenities: [],

@@ -8,6 +8,7 @@ import type { Filters } from "@/lib/types";
 
 type FilterSidebarProps = {
   filters: Filters;
+  continents: string[];
   countries: string[];
   cities: string[];
   amenities: string[];
@@ -75,6 +76,7 @@ function ToggleField({
 
 export function FilterSidebar({
   filters,
+  continents,
   countries,
   cities,
   amenities,
@@ -93,10 +95,16 @@ export function FilterSidebar({
       </CardHeader>
       <CardContent className="space-y-4">
         <SelectField
+          label="Continent"
+          value={filters.continent}
+          options={continents}
+          onChange={(continent) => onChange({ ...filters, continent, country: "all", city: "all" })}
+        />
+        <SelectField
           label="Country"
           value={filters.country}
           options={countries}
-          onChange={(country) => onChange({ ...filters, country })}
+          onChange={(country) => onChange({ ...filters, country, city: "all" })}
         />
         <SelectField
           label="City"

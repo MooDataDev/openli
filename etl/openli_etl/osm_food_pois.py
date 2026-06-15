@@ -22,6 +22,7 @@ from shapely.geometry import LineString, Point, Polygon
 from tqdm import tqdm
 
 from openli_etl.cuisine_normalization import add_cuisine_columns
+from openli_etl.geo_normalization import add_continent_column, continent_from_country, continent_from_snapshot_path
 
 
 LOGGER = logging.getLogger("openli_etl.osm_food_pois")
@@ -96,6 +97,7 @@ OUTPUT_COLUMNS = [
     "addr_city",
     "addr_suburb",
     "addr_country",
+    "continent",
     "wheelchair",
     "outdoor_seating",
     "takeaway",
@@ -310,6 +312,11 @@ class RestaurantPoiHandler(osmium.SimpleHandler):
         for raw_key, output_key in RAW_TAG_COLUMNS.items():
             record[output_key] = tags.get(raw_key)
 
+        record["continent"] = continent_from_country(
+            record.get("addr_country"),
+            fallback=continent_from_snapshot_path(self.source_file),
+        )
+
         return {column: record.get(column) for column in OUTPUT_COLUMNS}
 
 
@@ -325,6 +332,7 @@ def build_dataframe(records: list[dict[str, object]]) -> pd.DataFrame:
     dataframe = dataframe[OUTPUT_COLUMNS]
     dataframe["lat"] = pd.to_numeric(dataframe["lat"], errors="coerce")
     dataframe["lon"] = pd.to_numeric(dataframe["lon"], errors="coerce")
+    dataframe = add_continent_column(dataframe)
     dataframe = add_cuisine_columns(dataframe)
     return dataframe[OUTPUT_COLUMNS]
 
